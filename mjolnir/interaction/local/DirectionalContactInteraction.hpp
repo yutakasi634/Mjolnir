@@ -2,6 +2,11 @@
 #define MJOLNIR_INTERACTION_DIRECTIONAL_CONTACT_INTERACTION_HPP
 #include <mjolnir/core/LocalInteractionBase.hpp>
 #include <mjolnir/math/math.hpp>
+#include <mjolnir/util/string.hpp>
+#include <mjolnir/util/logger.hpp>
+#include <tuple>
+#include <cmath>
+
 
 namespace mjolnir
 {
@@ -62,7 +67,7 @@ class DirectionalContactInteraction final : public LocalInteractionBase<traitsT>
   {
     for(auto& item: potentials_)
     {
-      std::get<contact_pot_type>(item).update(sys);
+      std::get<3>(item).update(sys);
     }
 
     this->cutoff_ = this->max_cutoff_length();
@@ -82,12 +87,14 @@ class DirectionalContactInteraction final : public LocalInteractionBase<traitsT>
 
   std::string name() const override
   {
-    return "DirectionalContact: {angle1 potentail: " + angle1_pot_type::name()
-        + ", angle2 potential: " + angle2_pot_type::name()
-        + ", contact potential: " + contact_pot_type::name() + "}";
+    return "DirectionalContact: {angle1 potentail: "_s + angle1_pot_type::name()
+        + ", angle2 potential: "_s + angle2_pot_type::name()
+        + ", contact potential: "_s + contact_pot_type::name() + "}"_s;
   }
 
   void write_topology(topology_type&) const override;
+  container_type const& potentials() const noexcept {return potentials_;}
+  container_type&       potentials()       noexcept {return potentials_;}
 
  private:
 
@@ -102,12 +109,12 @@ class DirectionalContactInteraction final : public LocalInteractionBase<traitsT>
     for(std::size_t i=0;i < this->potentials_.size(); ++i)
     {
       const indices_potentials_tuple& pot = this->potentials_[i];
-      const coordinate_type pos0 = sys.position(std::get<indices_type>(pot).first[1]);
-      const coordinate_type pos1 = sys.position(std::get<indices_type>(pot).first[2]);
+      const coordinate_type pos0 = sys.position(std::get<0>(pot)[1]);
+      const coordinate_type pos1 = sys.position(std::get<0>(pot)[2]);
       const coordinate_type dpos = sys.adjust_direction(pos1 - pos0);
       const real_type       len2 = math::length_sq(dpos);
 
-      const real_type rc = std::get<contact_pot_type>(pot).cutoff() + abs_margin;
+      const real_type rc = std::get<3>(pot).cutoff() + abs_margin;
       if(len2 < rc * rc)
       {
         this->active_contacts_.push_back(i);
@@ -119,12 +126,13 @@ class DirectionalContactInteraction final : public LocalInteractionBase<traitsT>
 
   const real_type max_cutoff_length() const noexcept
   {
-    const real_type max_cutoff = std::max_element(potentials_.begin(), potentials_.end(),
+    const auto max_cutoff_potential_itr = std::max_element(potentials_.begin(), potentials_.end(),
         [](const indices_potentials_tuple& lhs, const indices_potentials_tuple& rhs)
         {
-          return lhs.second.cutoff() < rhs.second.cutoff();
-        })->second.cutoff();
-    return max_cutoff;
+          return std::get<3>(lhs).cutoff() < std::get<3>(rhs).cutoff();
+        });
+
+    return std::get<3>(*max_cutoff_potential_itr).cutoff();
   }
 
  private:
@@ -148,14 +156,14 @@ void DirectionalContactInteraction<
   {
     const auto& idxp = this->potentials_[active_contact];
 
-    const auto angle1_pot  = std::get<angle1_pot_type>(idxp);
-    const auto angle2_pot  = std::get<angle2_pot_type>(idxp);
-    const auto contact_pot = std::get<contact_pot_type>(idxp);
+    const auto angle1_pot  = std::get<1>(idxp);
+    const auto angle2_pot  = std::get<2>(idxp);
+    const auto contact_pot = std::get<3>(idxp);
 
-    const std::size_t      Ci  = std::get<indices_type>(idxp)[0];
-    const std::size_t      Pi  = std::get<indices_type>(idxp)[1];
-    const std::size_t      Pj  = std::get<indices_type>(idxp)[2];
-    const std::size_t      Cj  = std::get<indices_type>(idxp)[3];
+    const std::size_t      Ci  = std::get<0>(idxp)[0];
+    const std::size_t      Pi  = std::get<0>(idxp)[1];
+    const std::size_t      Pj  = std::get<0>(idxp)[2];
+    const std::size_t      Cj  = std::get<0>(idxp)[3];
     const coordinate_type& rCi = sys.position(Ci);
     const coordinate_type& rPi = sys.position(Pi);
     const coordinate_type& rPj = sys.position(Pj);
@@ -175,7 +183,7 @@ void DirectionalContactInteraction<
 
     const coordinate_type Pij = sys.adjust_direction(rPi - rPj); // Pi -> Pj
     const real_type lPij = math::length(Pij);
-    if(lPij > contact_pot.cutoff_())
+    if(lPij > contact_pot.cutoff())
     {
       continue;
     }
@@ -201,7 +209,7 @@ void DirectionalContactInteraction<
     const coordinate_type dU_angle1_drCi =
         (angle1_coef_inv_sin * inv_len_PiCi) * (cos_theta1 * PiCi_reg - Pij_reg);
     const coordinate_type dU_angle1_drPj =
-        (angle1_coef_inv_sin * inv_len_Pij) * (cos_theta1 * Pij_reg - PiCj_reg);
+        (angle1_coef_inv_sin * inv_len_Pij) * (cos_theta1 * Pij_reg - PiCi_reg);
 
     const coordinate_type dU_angle1_drPi = -(dU_angle1_drCi + dU_angle1_drPj);
 
@@ -210,7 +218,7 @@ void DirectionalContactInteraction<
     const real_type inv_len_PjCj = math::rlength(PjCj);
     const coordinate_type PjCj_reg = PjCj * inv_len_PiCi;
 
-    const Pji_reg = - Pij_reg;
+    const coordinate_type Pji_reg = - Pij_reg;
     const real_type PjCj_dot_Pji = math::dot_product(PjCj_reg, Pji_reg);
     const real_type cos_theta2 = math::clamp(PjCj_dot_Pji, real_type(-1.0), real_type(1.0));
     const real_type theta2 = std::acos(cos_theta2);
@@ -225,16 +233,16 @@ void DirectionalContactInteraction<
     const coordinate_type dU_angle2_drPi =
         (angle2_coef_inv_sin * inv_len_Pij) * (cos_theta2 * Pji_reg - PjCj_reg);
 
-    const coordinate_type dU_angle2_drPj = -(dU_angle2_drCj + dU_angle2_drPj);
+    const coordinate_type dU_angle2_drPj = -(dU_angle2_drCj + dU_angle2_drPi);
 
     // dU_con(|Pij|) / dr
     const real_type contact_coef = contact_pot.derivative(lPij);
     const coordinate_type dU_con_drPj = contact_coef * Pij_reg;
     const coordinate_type dU_con_drPi = - dU_con_drPj;
 
-    const real_type U_angle1 = angle1_pot.calc_energy(theta1);
-    const real_type U_angle2 = angle2_pot.calc_energy(theta2);
-    const real_type U_con    = contact_pot.calc_energy(lPij);
+    const real_type U_angle1 = angle1_pot.potential(theta1);
+    const real_type U_angle2 = angle2_pot.potential(theta2);
+    const real_type U_con    = contact_pot.potential(lPij);
     const real_type U_angle1_U_con = U_angle1 * U_con;
     const real_type U_angle2_U_con = U_angle2 * U_con;
     const real_type U_angle1_U_angle2 = U_angle1 * U_angle2;
@@ -261,26 +269,27 @@ typename DirectionalContactInteraction<traitsT, angle1_potentialT,
 DirectionalContactInteraction<traitsT, angle1_potentialT, angle2_potentialT,
     contact_potentialT>::calc_energy(const system_type& sys) const noexcept
 {
+  real_type E = 0.0;
   for(const std::size_t active_contact : active_contacts_)
   {
     const auto& idxp = this->potentials_[active_contact];
 
-    const auto angle1_pot = std::get<angle1_pot_type>(idxp);
-    const auto angle2_pot = std::get<angle2_pot_type>(idxp);
-    const auto contact_pot = std::get<contact_pot_type>(idxp);
+    const auto angle1_pot = std::get<1>(idxp);
+    const auto angle2_pot = std::get<2>(idxp);
+    const auto contact_pot = std::get<3>(idxp);
 
-    const std::size_t Ci  = std::get<indices_type>(idxp)[0];
+    const std::size_t Ci  = std::get<0>(idxp)[0];
     const coordinate_type& rCi = sys.position(Ci);
-    const std::size_t Pi = std::get<indices_type>(idxp)[1];
+    const std::size_t Pi = std::get<0>(idxp)[1];
     const coordinate_type& rPi = sys.position(Pi);
-    const std::size_t Cj  = std::get<indices_type>(idxp)[2];
+    const std::size_t Cj  = std::get<0>(idxp)[2];
     const coordinate_type& rCj = sys.position(Cj);
-    const std::size_t Pj = std::get<indices_type>(idxp)[3];
+    const std::size_t Pj = std::get<0>(idxp)[3];
     const coordinate_type& rPj = sys.position(Pj);
 
     const coordinate_type Pij = sys.adjust_direction(rPi - rPj); // Pi -> Pj
     const real_type lPij = math::length(Pij);
-    if(lPij > contact_pot.cutoff_())
+    if(lPij > contact_pot.cutoff())
     {
       continue;
     }
@@ -300,16 +309,15 @@ DirectionalContactInteraction<traitsT, angle1_potentialT, angle2_potentialT,
     // calculate theta2
     const coordinate_type PjCj = sys.adjust_direction(rPj - rCj);
     const real_type inv_len_PjCj = math::rlength(PjCj);
-    const coordinate_type PjCj_reg = PjCj * inv_len_PiCi;
+    const coordinate_type PjCj_reg = PjCj * inv_len_PjCj;
 
-    const Pji_reg = - Pij_reg;
+    const coordinate_type Pji_reg = - Pij_reg;
     const real_type PjCj_dot_Pji = math::dot_product(PjCj_reg, Pji_reg);
     const real_type cos_theta2 = math::clamp(PjCj_dot_Pji, real_type(-1.0), real_type(1.0));
     const real_type theta2 = std::acos(cos_theta2);
 
-    E += std::get<angle1_pot_type>(idxp).potential(theta1)
-        + std::get<angle2_pot_type>(idxp).potential(theta2)
-        + std::get<contact_pot_type>(idxp).potential(lPij);
+    E += angle1_pot.potential(theta1) + angle2_pot.potential(theta2)
+      + contact_pot.potential(lPij);
   }
   return E;
 }
@@ -320,6 +328,15 @@ void DirectionalContactInteraction<traitsT, angle1_potentialT,
                                    angle2_potentialT, contact_potentialT>
 ::write_topology(topology_type& topol) const
 {
+  if(this->kind_.empty() || this->kind_ == "none") {return;}
+
+  for(const auto& idxp : this->potentials_)
+    {
+      const auto indices = std::get<0>(idxp);
+      const auto Pi = indices[1];
+      const auto Pj = indices[2];
+      topol.add_connection(Pi, Pj, this->kind_);
+    }
   return;
 }
 

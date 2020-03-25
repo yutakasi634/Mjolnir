@@ -7,7 +7,6 @@
 #include <mjolnir/util/logger.hpp>
 #include <mjolnir/util/format_nth.hpp>
 #include <mjolnir/math/vector_util.hpp>
-#include <mjolnir/input/read_table_from_file.hpp>
 #include <mjolnir/input/read_path.hpp>
 #include <mjolnir/input/utility.hpp>
 
@@ -113,7 +112,7 @@ read_system(const toml::value& root, const std::size_t N)
         }
     }
 
-    const auto system = read_table_from_file(systems.at(N), "systems", input_path);
+    const auto system = systems.at(N);
 
     check_keys_available(system, {"boundary_shape"_s, "attributes"_s, "particles"_s});
 

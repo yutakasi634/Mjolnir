@@ -7,7 +7,6 @@
 #include <mjolnir/input/read_local_interaction.hpp>
 #include <mjolnir/input/read_global_interaction.hpp>
 #include <mjolnir/input/read_external_interaction.hpp>
-#include <mjolnir/input/read_table_from_file.hpp>
 #include <mjolnir/input/read_path.hpp>
 #include <mjolnir/input/utility.hpp>
 
@@ -22,8 +21,7 @@ read_forcefield(const toml::value& root, const std::size_t N)
     MJOLNIR_LOG_FUNCTION();
 
     const auto input_path = read_input_path(root);
-    const auto ff = read_table_from_file(toml::find(root, "forcefields").at(N),
-                                         "forcefields", input_path);
+    const auto ff = toml::find(root, "forcefields").at(N);
     check_keys_available(ff, {"local"_s, "global"_s, "external"_s, "name"_s});
 
     if(ff.as_table().count("name") == 1)
@@ -44,8 +42,7 @@ read_forcefield(const toml::value& root, const std::size_t N)
         for(std::size_t i=0; i<locals.size(); ++i)
         {
             MJOLNIR_LOG_NOTICE("reading ", format_nth(i), " [[forcefields.local]]");
-            loc.emplace(read_local_interaction<traitsT>(
-                read_table_from_file(locals.at(i), "local", input_path)));
+            loc.emplace(read_local_interaction<traitsT>(locals.at(i)));
         }
     }
     if(ff.as_table().count("global") != 0)
@@ -55,8 +52,7 @@ read_forcefield(const toml::value& root, const std::size_t N)
         for(std::size_t i=0; i<globals.size(); ++i)
         {
             MJOLNIR_LOG_NOTICE("reading ", format_nth(i), " [[forcefields.global]]");
-            glo.emplace(read_global_interaction<traitsT>(
-                read_table_from_file(globals.at(i), "global", input_path)));
+            glo.emplace(read_global_interaction<traitsT>(globals.at(i)));
         }
     }
     if(ff.as_table().count("external") != 0)
@@ -66,8 +62,7 @@ read_forcefield(const toml::value& root, const std::size_t N)
         for(std::size_t i=0; i<externals.size(); ++i)
         {
             MJOLNIR_LOG_NOTICE("reading ", format_nth(i), " [[forcefields.external]]");
-            ext.emplace(read_external_interaction<traitsT>(
-                read_table_from_file(externals.at(i), "external", input_path)));
+            ext.emplace(read_external_interaction<traitsT>(externals.at(i)));
         }
     }
     return ForceField<traitsT>(std::move(loc), std::move(glo), std::move(ext));

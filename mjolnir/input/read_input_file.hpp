@@ -127,13 +127,79 @@ read_precision(const toml::value& root, const toml::value& simulator)
     }
 }
 
+void try_insert_file(toml::value& table_val, toml::string file_name)
+{
+    auto file_contents = toml::parse(file_name).as_table();
+    for(auto key_value_in_file : file_contents)
+    {
+        if(!table_val.contains(key_value_in_file.first))
+        {
+            table_val.as_table().insert(key_value_in_file);
+        }
+        else
+        {
+            throw_exception<std::runtime_error>("[error] "
+            "mjolnir::expand_file_name reading `", std::string(file_name), "`: ",
+            std::string(key_value_in_file.first), " already exist");
+        }
+    }
+    return ;
+}
+
+void expand_file_name(toml::value& root)
+{
+    while(root.contains("file_name"))
+    {
+        const auto file_name = toml::find(root, "file_name");
+        root.as_table().erase("file_name");
+        if(file_name.is_array())
+        {
+            for(auto file_name_val : file_name.as_array())
+            {
+                std::cerr << "-- expanding toml file `" << file_name_val.as_string() << "` ... ";
+                try_insert_file(root, file_name_val.as_string());
+                std::cerr << " successfully expanded." << std::endl;
+            }
+        }
+        else
+        {
+            std::cerr << "-- expanding toml file `" << file_name.as_string() << "` ... ";
+            try_insert_file(root, file_name.as_string());
+            std::cerr << " successfully expanded." << std::endl;
+        }
+    }
+
+    for(auto& key_value : root.as_table())
+    {
+        if(key_value.second.is_table())
+        {
+            expand_file_name(key_value.second);
+        }
+        else if(key_value.second.is_array())
+        {
+            for(auto& value : key_value.second.as_array())
+            {
+                if(value.is_table())
+                {
+                    expand_file_name(value);
+                }
+            }
+        }
+    }
+
+    return ;
+}
+
 inline std::unique_ptr<SimulatorBase>
 read_input_file(const std::string& filename)
 {
     // here, logger name is not given yet. output status directory on console.
     std::cerr << "-- reading and parsing toml file `" << filename << "` ... ";
-    const auto root = toml::parse(filename);
+    auto root = toml::parse(filename);
     std::cerr << " successfully parsed." << std::endl;
+
+    // expand file_name key in toml value tree.
+    expand_file_name(root);
 
     // initializing logger by using output_path and output_prefix ...
     const auto& output   = toml::find(root, "files", "output");
@@ -154,7 +220,7 @@ read_input_file(const std::string& filename)
     // Check top-level toml-values. Since it uses logger to warn,
     // we need to call it after `MJOLNIR_SET_DEFAULT_LOGGER(logger_name)`.
     check_keys_available(root, {"files"_s, "units"_s, "simulator"_s,
-                                "systems"_s, "forcefields"_s});
+                                "systems"_s, "forcefields"_s, "file_name"_s});
 
     // the most of important flags are defined in [simulator], like
     // `precision = "float"`, `boundary_type = "Unlimited"`.
@@ -162,8 +228,7 @@ read_input_file(const std::string& filename)
     // Thus first read [simulator] here and pass it to the latter functions.
 
     const auto& simulator = toml::find(root, "simulator");
-    return read_precision(root, read_table_from_file(
-                simulator, "simulator", read_input_path(root)));
+    return read_precision(root,  simulator);
 }
 
 #ifdef MJOLNIR_SEPARATE_BUILD

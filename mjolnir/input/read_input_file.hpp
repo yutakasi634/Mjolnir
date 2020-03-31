@@ -127,9 +127,9 @@ read_precision(const toml::value& root, const toml::value& simulator)
     }
 }
 
-void try_insert_file(toml::value& table_val, toml::string file_name)
+void try_insert_file(toml::value& table_val, toml::string include_file)
 {
-    auto file_contents = toml::parse(file_name).as_table();
+    auto file_contents = toml::parse(include_file).as_table();
     for(auto key_value_in_file : file_contents)
     {
         if(!table_val.contains(key_value_in_file.first))
@@ -139,32 +139,32 @@ void try_insert_file(toml::value& table_val, toml::string file_name)
         else
         {
             throw_exception<std::runtime_error>("[error] "
-            "mjolnir::expand_file_name reading `", std::string(file_name), "`: ",
+            "mjolnir::expand_include_file reading `", std::string(include_file), "`: ",
             std::string(key_value_in_file.first), " already exist");
         }
     }
     return ;
 }
 
-void expand_file_name(toml::value& root)
+void expand_include_file(toml::value& root)
 {
-    while(root.contains("file_name"))
+    while(root.contains("include_file"))
     {
-        const auto file_name = toml::find(root, "file_name");
-        root.as_table().erase("file_name");
-        if(file_name.is_array())
+        const auto include_file = toml::find(root, "include_file");
+        root.as_table().erase("include_file");
+        if(include_file.is_array())
         {
-            for(auto file_name_val : file_name.as_array())
+            for(auto include_file_val : include_file.as_array())
             {
-                std::cerr << "-- expanding toml file `" << file_name_val.as_string() << "` ... ";
-                try_insert_file(root, file_name_val.as_string());
+                std::cerr << "-- expanding toml file `" << include_file_val.as_string() << "` ... ";
+                try_insert_file(root, include_file_val.as_string());
                 std::cerr << " successfully expanded." << std::endl;
             }
         }
         else
         {
-            std::cerr << "-- expanding toml file `" << file_name.as_string() << "` ... ";
-            try_insert_file(root, file_name.as_string());
+            std::cerr << "-- expanding toml file `" << include_file.as_string() << "` ... ";
+            try_insert_file(root, include_file.as_string());
             std::cerr << " successfully expanded." << std::endl;
         }
     }
@@ -173,7 +173,7 @@ void expand_file_name(toml::value& root)
     {
         if(key_value.second.is_table())
         {
-            expand_file_name(key_value.second);
+            expand_include_file(key_value.second);
         }
         else if(key_value.second.is_array())
         {
@@ -181,7 +181,7 @@ void expand_file_name(toml::value& root)
             {
                 if(value.is_table())
                 {
-                    expand_file_name(value);
+                    expand_include_file(value);
                 }
             }
         }
@@ -198,8 +198,8 @@ read_input_file(const std::string& filename)
     auto root = toml::parse(filename);
     std::cerr << " successfully parsed." << std::endl;
 
-    // expand file_name key in toml value tree.
-    expand_file_name(root);
+    // expand include_file key in toml value tree.
+    expand_include_file(root);
 
     // initializing logger by using output_path and output_prefix ...
     const auto& output   = toml::find(root, "files", "output");
@@ -220,7 +220,7 @@ read_input_file(const std::string& filename)
     // Check top-level toml-values. Since it uses logger to warn,
     // we need to call it after `MJOLNIR_SET_DEFAULT_LOGGER(logger_name)`.
     check_keys_available(root, {"files"_s, "units"_s, "simulator"_s,
-                                "systems"_s, "forcefields"_s, "file_name"_s});
+                                "systems"_s, "forcefields"_s, "include_file"_s});
 
     // the most of important flags are defined in [simulator], like
     // `precision = "float"`, `boundary_type = "Unlimited"`.

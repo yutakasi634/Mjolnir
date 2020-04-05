@@ -127,26 +127,47 @@ read_precision(const toml::value& root, const toml::value& simulator)
     }
 }
 
-void try_insert_file(toml::value& table_val, toml::string include_file)
+void try_merge_val(toml::value& first_val, toml::value& second_val,
+                   const std::vector<toml::key>& subject_branch_keys,
+                   const toml::string& include_file)
 {
-    auto file_contents = toml::parse(include_file).as_table();
-    for(auto key_value_in_file : file_contents)
+    toml::value old_first_val = first_val;
+    if(!(old_first_val.is_table() && second_val.is_table()))
     {
-        if(!table_val.contains(key_value_in_file.first))
+        std::string branch_keys_str = "";
+        for(const auto& key : subject_branch_keys)
         {
-            table_val.as_table().insert(key_value_in_file);
+            branch_keys_str += "." + std::string(key);
         }
-        else
+        branch_keys_str.erase(0,1);
+
+        throw_exception<std::runtime_error>("[error] "
+        "mjolnir::expand_include_file reading `", std::string(include_file), "`: ",
+        branch_keys_str, " definition is duplicated");
+    }
+    else
+    {
+        for(auto& key_val_in_second : second_val.as_table())
         {
-            throw_exception<std::runtime_error>("[error] "
-            "mjolnir::expand_include_file reading `", std::string(include_file), "`: ",
-            std::string(key_value_in_file.first), " already exist");
+            auto& second_table_key = key_val_in_second.first;
+            auto& second_table_val = key_val_in_second.second;
+            if(old_first_val.contains(second_table_key))
+            {
+                auto new_subject_branch_keys = subject_branch_keys;
+                new_subject_branch_keys.push_back(second_table_key);
+                try_merge_val(toml::find(first_val, second_table_key),
+                              second_table_val, new_subject_branch_keys, include_file);
+            }
+            else
+            {
+                first_val.as_table().insert(key_val_in_second);
+            }
         }
     }
-    return ;
+    return;
 }
 
-void expand_include_file(toml::value& root)
+void expand_include_file(toml::value& root, const std::vector<toml::key>& subject_branch_keys)
 {
     while(root.contains("include_file"))
     {
@@ -156,24 +177,30 @@ void expand_include_file(toml::value& root)
         {
             for(auto include_file_val : include_file.as_array())
             {
-                std::cerr << "-- expanding toml file `" << include_file_val.as_string() << "` ... ";
-                try_insert_file(root, include_file_val.as_string());
+                std::string include_file_name = include_file_val.as_string();
+                std::cerr << "-- expanding toml file `" << include_file_name << "` ... ";
+                toml::value val_in_file = toml::parse(include_file_name);
+                try_merge_val(root, val_in_file, subject_branch_keys, include_file_name);
                 std::cerr << " successfully expanded." << std::endl;
             }
         }
         else
         {
+            std::string include_file_name = include_file.as_string();
             std::cerr << "-- expanding toml file `" << include_file.as_string() << "` ... ";
-            try_insert_file(root, include_file.as_string());
+            toml::value val_in_file = toml::parse(include_file_name);
+            try_merge_val(root, val_in_file, subject_branch_keys, include_file_name);
             std::cerr << " successfully expanded." << std::endl;
         }
     }
 
     for(auto& key_value : root.as_table())
     {
+        auto new_branch_keys = subject_branch_keys;
+        new_branch_keys.push_back(key_value.first);
         if(key_value.second.is_table())
         {
-            expand_include_file(key_value.second);
+            expand_include_file(key_value.second, new_branch_keys);
         }
         else if(key_value.second.is_array())
         {
@@ -181,12 +208,11 @@ void expand_include_file(toml::value& root)
             {
                 if(value.is_table())
                 {
-                    expand_include_file(value);
+                    expand_include_file(value, new_branch_keys);
                 }
             }
         }
     }
-
     return ;
 }
 
@@ -199,7 +225,7 @@ read_input_file(const std::string& filename)
     std::cerr << " successfully parsed." << std::endl;
 
     // expand include_file key in toml value tree.
-    expand_include_file(root);
+    expand_include_file(root, {toml::key("root")});
 
     // initializing logger by using output_path and output_prefix ...
     const auto& output   = toml::find(root, "files", "output");

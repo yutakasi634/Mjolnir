@@ -133,7 +133,7 @@ because it takes relatively long time" ON)
 option(SEPARATE_BUILD "separate build process. It reduces the compilation time \
 after building it once. But it possibly gains performance loss. So this is not \
 for users, but for developers who compile this application many time with small\
- changes." OFF)
+changes." OFF)
 
 if(APPLE)
     # With apple clang, `~destructor() = defualt` does not work and causes a

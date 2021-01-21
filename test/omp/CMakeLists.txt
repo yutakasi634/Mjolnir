@@ -18,6 +18,7 @@ set(TEST_NAMES
     test_omp_global_debye_huckel_interaction
     test_omp_global_pdns_interaction
     test_omp_global_pwmcos_interaction
+    test_omp_global_stoichiometric_interaction
 
     test_omp_external_distance_interaction
     test_omp_position_restraint_interaction
@@ -35,6 +36,10 @@ endif()
 
 foreach(TEST_NAME ${TEST_NAMES})
     add_executable(${TEST_NAME} ${TEST_NAME}.cpp)
+
+    set_target_properties(${TEST_NAME} PROPERTIES
+        COMPILE_FLAGS "-fsanitize=address -fno-omit-frame-pointer"
+        LINK_FLAGS    "-fsanitize=address -fno-omit-frame-pointer")
 
     # here we use less-aggressive optimization flag to turn on NaN checking.
     set_target_properties(${TEST_NAME} PROPERTIES

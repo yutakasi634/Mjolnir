@@ -186,18 +186,10 @@ struct fixed_vector
 
     void resize(size_type sz)
     {
-        if(N < sz)
-        {
-            throw std::bad_alloc("fixed_vector::resize()");
-        }
         size_ = sz;
     }
     void resize(size_type sz, const value_type& c)
     {
-        if(N < sz)
-        {
-            throw std::bad_alloc("fixed_vector::resize()");
-        }
         if(size_ < sz)
         {
             std::fill_n(container_.begin() + size_, sz - size_, c);

@@ -23,6 +23,7 @@ set(mjolnir_omp_cpp_files
     "${CMAKE_CURRENT_SOURCE_DIR}/PWMcosInteraction.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/UnlimitedGridCellList.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/PeriodicGridCellList.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/PeriodicGridStoichiometricInteractionCellList.cpp"
     )
 set(mjolnir_cpp_files
     ${mjolnir_cpp_files}

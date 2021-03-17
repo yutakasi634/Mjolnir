@@ -37,6 +37,7 @@
 #include <mjolnir/omp/ExternalDistanceInteraction.hpp>
 #include <mjolnir/omp/UnlimitedGridCellList.hpp>
 #include <mjolnir/omp/PeriodicGridCellList.hpp>
+#include <mjolnir/omp/PeriodicGridStoichiometricInteractionCellList.hpp>
 #include <mjolnir/omp/UnderdampedLangevinIntegrator.hpp>
 #include <mjolnir/omp/BAOABLangevinIntegrator.hpp>
 #include <mjolnir/omp/gBAOABLangevinIntegrator.hpp>

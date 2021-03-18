@@ -178,20 +178,20 @@ class PeriodicGridCellList<OpenMPSimulatorTraits<realT, boundaryT>,
     {
         // `participants` is a list that contains indices of particles that are
         // related to the potential.
-        const auto& participants = pot.participants();
+        const auto& following_participants = pot.following_participants();
 
         neighbor_list.clear();
-        if(index_by_cell_    .size() != participants.size() ||
-           index_by_cell_buf_.size() != participants.size())
+        if(index_by_cell_    .size() != following_participants.size() ||
+           index_by_cell_buf_.size() != following_participants.size())
         {
-            index_by_cell_    .resize(participants.size());
-            index_by_cell_buf_.resize(participants.size());
+            index_by_cell_    .resize(following_participants.size());
+            index_by_cell_buf_.resize(following_participants.size());
         }
 
 #pragma omp parallel for
-        for(std::size_t i=0; i<participants.size(); ++i)
+        for(std::size_t i=0; i<following_participants.size(); ++i)
         {
-            const auto idx = participants[i];
+            const auto idx = following_participants[i];
             index_by_cell_[i] =
                 std::make_pair(idx, this->calc_index(sys.position(idx)));
         }
